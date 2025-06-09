@@ -1,14 +1,16 @@
 import "./Character.scss";
-
 import React, { useState, useEffect, useRef } from "react";
 
 const runFrameCount = 24;
 const jumpUpFrameCount = 6;
-const fallFrameCount = 6; // количество кадров для падения (пример)
+const fallFrameCount = 6;
 const sprintFrameCount = 12;
-const idleFrameCount = 18; // количество кадров стояния (пример)
+const idleFrameCount = 18;
 
-const Character = () => {
+const characterWidth = 100;
+const characterHeight = 100;
+
+const Character = ({ platforms, onPositionChange }) => {
     const renderPosition = useRef({ x: 100, y: 300 });
     const [displayPos, setDisplayPos] = useState({ x: 100, y: 300 });
 
@@ -19,7 +21,7 @@ const Character = () => {
     const [isRunning, setIsRunning] = useState(false);
     const [isSprinting, setIsSprinting] = useState(false);
     const [isFalling, setIsFalling] = useState(false);
-    const [facingRight, setFacingRight] = useState(true); // направление взгляда
+    const [facingRight, setFacingRight] = useState(true);
 
     const gravity = 0.6;
     const jumpPower = -12;
@@ -27,27 +29,11 @@ const Character = () => {
     const sprintSpeed = 8;
     const groundY = 445;
 
-    // Пути к кадрам анимаций
-    const idleFrames = Array.from(
-        { length: idleFrameCount },
-        (_, i) => `/sprites/idle_blinking/0_Dark_Oracle_Idle Blinking_${i}.png`
-    );
-    const runFrames = Array.from(
-        { length: runFrameCount },
-        (_, i) => `/sprites/walking/0_Dark_Oracle_Walking_${i}.png`
-    );
-    const jumpUpFrames = Array.from(
-        { length: jumpUpFrameCount },
-        (_, i) => `/sprites/jump/0_Dark_Oracle_Jump Start_${i}.png`
-    );
-    const fallFrames = Array.from(
-        { length: fallFrameCount },
-        (_, i) => `/sprites/falling_down/0_Dark_Oracle_Falling Down_${i}.png`
-    );
-    const sprintFrames = Array.from(
-        { length: sprintFrameCount },
-        (_, i) => `/sprites/running/0_Dark_Oracle_Running_${i}.png`
-    );
+    const idleFrames = Array.from({ length: idleFrameCount }, (_, i) => `/sprites/idle_blinking/0_Dark_Oracle_Idle Blinking_${i}.png`);
+    const runFrames = Array.from({ length: runFrameCount }, (_, i) => `/sprites/walking/0_Dark_Oracle_Walking_${i}.png`);
+    const jumpUpFrames = Array.from({ length: jumpUpFrameCount }, (_, i) => `/sprites/jump/0_Dark_Oracle_Jump Start_${i}.png`);
+    const fallFrames = Array.from({ length: fallFrameCount }, (_, i) => `/sprites/falling_down/0_Dark_Oracle_Falling Down_${i}.png`);
+    const sprintFrames = Array.from({ length: sprintFrameCount }, (_, i) => `/sprites/running/0_Dark_Oracle_Running_${i}.png`);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -78,7 +64,6 @@ const Character = () => {
             const jumping = keys.current["w"] || keys.current[" "];
             const sprintKey = keys.current["shift"];
 
-            // Управление скоростью и спринтом
             if (movingLeft) {
                 vel.x = sprintKey && !isJumping.current ? -sprintSpeed : -moveSpeed;
             } else if (movingRight) {
@@ -87,63 +72,98 @@ const Character = () => {
                 vel.x = 0;
             }
 
-            // Обновление направления взгляда мгновенно
-            if (vel.x > 0) {
-                setFacingRight(true);
-            } else if (vel.x < 0) {
-                setFacingRight(false);
-            }
+            if (vel.x > 0) setFacingRight(true);
+            else if (vel.x < 0) setFacingRight(false);
 
-            // Прыжок
             if (jumping && !isJumping.current) {
                 vel.y = jumpPower;
                 isJumping.current = true;
             }
 
-            // Гравитация
             vel.y += gravity;
 
-            // Обновление позиции
             pos.x += vel.x;
+
+            platforms.forEach((plat) => {
+                const charLeft = pos.x;
+                const charRight = pos.x + characterWidth;
+                const charTop = pos.y;
+                const charBottom = pos.y + characterHeight;
+
+                const platLeft = plat.x;
+                const platRight = plat.x + plat.width;
+                const platTop = plat.y;
+                const platBottom = plat.y + plat.height;
+
+                const horizontalOverlap =
+                    charRight > platLeft &&
+                    charLeft < platRight &&
+                    charBottom > platTop &&
+                    charTop < platBottom;
+
+                if (horizontalOverlap) {
+                    if (vel.x > 0) {
+                        pos.x = platLeft - characterWidth;
+                    } else if (vel.x < 0) {
+                        pos.x = platRight;
+                    }
+                    vel.x = 0;
+                }
+            });
+
             pos.y += vel.y;
 
-            // Земля
+            let onPlatform = false;
+
+            platforms.forEach((plat) => {
+                const withinX = pos.x + characterWidth > plat.x && pos.x < plat.x + plat.width;
+                const touchingTop =
+                    pos.y + characterHeight >= plat.y &&
+                    pos.y + characterHeight <= plat.y + 10;
+
+                if (withinX && touchingTop && vel.y >= 0) {
+                    pos.y = plat.y - characterHeight;
+                    vel.y = 0;
+                    isJumping.current = false;
+                    onPlatform = true;
+                }
+            });
+
             if (pos.y >= groundY) {
                 pos.y = groundY;
                 vel.y = 0;
                 isJumping.current = false;
                 setIsFalling(false);
-            } else {
+            } else if (!onPlatform) {
                 setIsFalling(vel.y > 0);
+            } else {
+                setIsFalling(false);
             }
 
             setDisplayPos({ x: pos.x, y: pos.y });
-
-            // Флаги для анимации
-            setIsSprinting(
-                !isJumping.current && sprintKey && Math.abs(vel.x) > moveSpeed
-            );
+            setIsSprinting(!isJumping.current && sprintKey && Math.abs(vel.x) > moveSpeed);
             setIsRunning(vel.x !== 0);
+
+            if (onPositionChange) {
+                onPositionChange(pos);
+            }
 
             frameId = requestAnimationFrame(loop);
         };
 
         frameId = requestAnimationFrame(loop);
         return () => cancelAnimationFrame(frameId);
-    }, []);
+    }, [platforms]);
 
-    // Анимация (бег, прыжок вверх, падение, спринт, стояние)
     useEffect(() => {
         let interval;
 
         if (isJumping.current) {
             if (isFalling) {
-                // Падение
                 interval = setInterval(() => {
                     setFrame((f) => (f + 1) % fallFrameCount);
                 }, 100);
             } else {
-                // Прыжок вверх
                 interval = setInterval(() => {
                     setFrame((f) => (f + 1) % jumpUpFrameCount);
                 }, 100);
@@ -157,23 +177,19 @@ const Character = () => {
                 setFrame((f) => (f + 1) % runFrameCount);
             }, 50);
         } else {
-            // Стоячее состояние (idle)
             interval = setInterval(() => {
                 setFrame((f) => (f + 1) % idleFrameCount);
             }, 300);
         }
 
         return () => clearInterval(interval);
-    }, [isRunning, isJumping.current, isSprinting, isFalling]);
+    }, [isRunning, isSprinting, isFalling]);
 
-    // Выбор правильного кадра для отображения
     let currentSrc = idleFrames[frame % idleFrameCount];
     if (isJumping.current) {
-        if (isFalling) {
-            currentSrc = fallFrames[frame % fallFrameCount];
-        } else {
-            currentSrc = jumpUpFrames[frame % jumpUpFrameCount];
-        }
+        currentSrc = isFalling
+            ? fallFrames[frame % fallFrameCount]
+            : jumpUpFrames[frame % jumpUpFrameCount];
     } else if (isSprinting) {
         currentSrc = sprintFrames[frame % sprintFrameCount];
     } else if (isRunning) {
@@ -182,16 +198,18 @@ const Character = () => {
 
     return (
         <img
+            className="character"
             src={currentSrc}
             alt="character"
             style={{
                 position: "absolute",
                 left: `${displayPos.x}px`,
                 top: `${displayPos.y}px`,
-                width: "150px",
-                height: "150px",
+                width: `${characterWidth}px`,
+                height: `${characterHeight}px`,
                 imageRendering: "pixelated",
-                transform: facingRight ? "scaleX(1)" : "scaleX(-1)", // мгновенный флип без transition
+                transform: facingRight ? "scaleX(1)" : "scaleX(-1)",
+                zIndex: 10,
                 userSelect: "none",
             }}
             draggable={false}

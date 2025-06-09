@@ -1,8 +1,8 @@
-.main_area{
-  width: 100%;
+.main_area {
+  position: relative;
+  width: 100vw;
   height: 100vh;
-  background-image: url("../../images/WIN_20250411_16_19_14_Pro.jpg");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
 }
